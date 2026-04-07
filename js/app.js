@@ -1,4 +1,4 @@
-const API = "https://tat16555.github.io/Problem_record_dataweb/";
+const API = "https://script.google.com/macros/s/https://tat16555.github.io/Problem_record_dataweb//exec";
 
 let allData = [];
 

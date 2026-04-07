@@ -3,31 +3,45 @@ const API = "https://script.google.com/macros/s/AKfycbwFFI_bDZKwNG47eYcm0zxGTnzP
 let allData = [];
 
 // โหลดข้อมูล
-function loadData() {
-  fetch(API)
-    .then(res => res.json())
-    .then(data => {
-      allData = data;
-      render(data);
-    });
+async function loadData() {
+  try {
+    const res = await fetch(API);
+    if (!res.ok) throw new Error("ไม่สามารถเชื่อมต่อ API ได้: " + res.status);
+    const data = await res.json();
+    allData = data;
+    render(data);
+  } catch (err) {
+    console.error(err);
+    document.getElementById("tbody").innerHTML = `<tr><td colspan="100%" class="text-center text-danger">❌ ไม่สามารถโหลดข้อมูลได้: ${err.message}</td></tr>`;
+    document.getElementById("thead").innerHTML = "";
+  }
 }
 
 // แสดงตาราง
 function render(data) {
-  if (!data.length) return;
+  if (!data.length) {
+    document.getElementById("thead").innerHTML = "";
+    document.getElementById("tbody").innerHTML = `<tr><td colspan="100%" class="text-center">ไม่มีข้อมูล</td></tr>`;
+    return;
+  }
 
   const headers = Object.keys(data[0]).filter(h => h !== "_row");
 
+  // สร้าง header
   document.getElementById("thead").innerHTML =
     "<tr>" + headers.map(h => `<th>${h}</th>`).join("") + "<th>จัดการ</th></tr>";
 
+  // สร้าง rows
   let html = "";
-
   data.forEach(row => {
     html += "<tr>";
-
     headers.forEach(h => {
-      html += `<td contenteditable="true">${row[h] || ""}</td>`;
+      // ถ้าเป็นไฟล์แนบ ให้สร้างลิงก์คลิกได้
+      if (h === "ไฟล์แนบ" && row[h]) {
+        html += `<td><a href="${row[h]}" target="_blank">📎 เปิดไฟล์</a></td>`;
+      } else {
+        html += `<td contenteditable="true">${row[h] || ""}</td>`;
+      }
     });
 
     html += `
@@ -42,57 +56,72 @@ function render(data) {
 }
 
 // ➕ เพิ่ม
-function addData() {
-  const data = {
-    "ชื่อ": document.getElementById("name").value,
-    "รายละเอียด": document.getElementById("detail").value
-  };
+async function addData() {
+  const name = document.getElementById("name").value.trim();
+  const detail = document.getElementById("detail").value.trim();
 
-  fetch(API, {
-    method: "POST",
-    body: JSON.stringify(data)
-  }).then(() => loadData());
+  if (!name || !detail) {
+    alert("กรุณากรอกชื่อและรายละเอียดก่อนเพิ่ม");
+    return;
+  }
+
+  try {
+    await fetch(API, {
+      method: "POST",
+      body: JSON.stringify({ "ชื่อ": name, "รายละเอียด": detail })
+    });
+    document.getElementById("name").value = "";
+    document.getElementById("detail").value = "";
+    loadData();
+  } catch (err) {
+    console.error(err);
+    alert("❌ เพิ่มข้อมูลไม่สำเร็จ");
+  }
 }
 
 // 💾 บันทึกแก้ไข
-function saveRow(btn, row) {
+async function saveRow(btn, row) {
   const tr = btn.closest("tr");
   const cells = tr.querySelectorAll("td");
-
   let values = [];
 
   for (let i = 0; i < cells.length - 1; i++) {
-    values.push(cells[i].innerText);
+    // ถ้าเป็นไฟล์แนบ ให้เก็บ url จริง
+    const a = cells[i].querySelector("a");
+    if (a) values.push(a.href);
+    else values.push(cells[i].innerText);
   }
 
-  fetch(API, {
-    method: "PUT",
-    body: JSON.stringify({
-      row: row,
-      values: values
-    })
-  }).then(() => alert("บันทึกแล้ว"));
+  try {
+    await fetch(API, {
+      method: "PUT",
+      body: JSON.stringify({ row: row, values: values })
+    });
+    loadData();
+  } catch (err) {
+    console.error(err);
+    alert("❌ บันทึกไม่สำเร็จ");
+  }
 }
 
 // ❌ ลบ
-function deleteData(row) {
+async function deleteData(row) {
   if (!confirm("ลบข้อมูล?")) return;
-
-  fetch(API + "?row=" + row, {
-    method: "DELETE"
-  }).then(() => loadData());
+  try {
+    await fetch(API + "?row=" + row, { method: "DELETE" });
+    loadData();
+  } catch (err) {
+    console.error(err);
+    alert("❌ ลบไม่สำเร็จ");
+  }
 }
 
 // 🔍 search
 document.getElementById("search").addEventListener("input", function() {
   const keyword = this.value.toLowerCase();
-
   const filtered = allData.filter(row =>
-    Object.values(row).some(val =>
-      String(val).toLowerCase().includes(keyword)
-    )
+    Object.values(row).some(val => String(val).toLowerCase().includes(keyword))
   );
-
   render(filtered);
 });
 

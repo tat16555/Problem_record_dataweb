@@ -1,12 +1,5 @@
-body {
-  background: #f8f9fa;
-}
+body { background: #f8f9fa; }
 
-table td {
-  font-size: 14px;
-  vertical-align: middle;
-}
+table td { font-size: 14px; vertical-align: middle; }
 
-.card {
-  border-radius: 12px;
-}
+.card { border-radius: 12px; }

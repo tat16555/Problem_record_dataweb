@@ -6,14 +6,14 @@ let allData = [];
 async function loadData() {
   try {
     const res = await fetch(API);
-    if (!res.ok) throw new Error("ไม่สามารถเชื่อมต่อ API ได้: " + res.status);
+    if (!res.ok) throw new Error("ไม่สามารถเชื่อมต่อ API: " + res.status);
     const data = await res.json();
     allData = data;
     render(data);
   } catch (err) {
     console.error(err);
-    document.getElementById("tbody").innerHTML = `<tr><td colspan="100%" class="text-center text-danger">❌ ไม่สามารถโหลดข้อมูลได้: ${err.message}</td></tr>`;
     document.getElementById("thead").innerHTML = "";
+    document.getElementById("tbody").innerHTML = `<tr><td colspan="100%" class="text-center text-danger">❌ โหลดข้อมูลไม่สำเร็จ: ${err.message}</td></tr>`;
   }
 }
 
@@ -26,30 +26,22 @@ function render(data) {
   }
 
   const headers = Object.keys(data[0]).filter(h => h !== "_row");
+  document.getElementById("thead").innerHTML = "<tr>" + headers.map(h => `<th>${h}</th>`).join("") + "<th>จัดการ</th></tr>";
 
-  // สร้าง header
-  document.getElementById("thead").innerHTML =
-    "<tr>" + headers.map(h => `<th>${h}</th>`).join("") + "<th>จัดการ</th></tr>";
-
-  // สร้าง rows
   let html = "";
   data.forEach(row => {
     html += "<tr>";
     headers.forEach(h => {
-      // ถ้าเป็นไฟล์แนบ ให้สร้างลิงก์คลิกได้
       if (h === "ไฟล์แนบ" && row[h]) {
         html += `<td><a href="${row[h]}" target="_blank">📎 เปิดไฟล์</a></td>`;
       } else {
         html += `<td contenteditable="true">${row[h] || ""}</td>`;
       }
     });
-
-    html += `
-      <td>
-        <button onclick="saveRow(this, ${row._row})" class="btn btn-warning btn-sm">💾</button>
-        <button onclick="deleteData(${row._row})" class="btn btn-danger btn-sm">❌</button>
-      </td>
-    </tr>`;
+    html += `<td>
+      <button onclick="saveRow(this, ${row._row})" class="btn btn-warning btn-sm">💾</button>
+      <button onclick="deleteData(${row._row})" class="btn btn-danger btn-sm">❌</button>
+    </td></tr>`;
   });
 
   document.getElementById("tbody").innerHTML = html;
@@ -59,11 +51,7 @@ function render(data) {
 async function addData() {
   const name = document.getElementById("name").value.trim();
   const detail = document.getElementById("detail").value.trim();
-
-  if (!name || !detail) {
-    alert("กรุณากรอกชื่อและรายละเอียดก่อนเพิ่ม");
-    return;
-  }
+  if (!name || !detail) return alert("กรุณากรอกชื่อและรายละเอียด");
 
   try {
     await fetch(API, {
@@ -79,28 +67,32 @@ async function addData() {
   }
 }
 
-// 💾 บันทึกแก้ไข
+// 💾 แก้ไข
 async function saveRow(btn, row) {
   const tr = btn.closest("tr");
   const cells = tr.querySelectorAll("td");
   let values = [];
 
   for (let i = 0; i < cells.length - 1; i++) {
-    // ถ้าเป็นไฟล์แนบ ให้เก็บ url จริง
     const a = cells[i].querySelector("a");
-    if (a) values.push(a.href);
-    else values.push(cells[i].innerText);
+    values.push(a ? a.href : cells[i].innerText);
   }
 
   try {
-    await fetch(API, {
+    const res = await fetch(API, {
       method: "PUT",
-      body: JSON.stringify({ row: row, values: values })
+      body: JSON.stringify({ row, values })
     });
-    loadData();
-  } catch (err) {
+    const result = await res.json();
+    if(result.status === "updated") {
+      alert("💾 บันทึกเรียบร้อย");
+      loadData();
+    } else {
+      alert("❌ บันทึกไม่สำเร็จ: " + result.message);
+    }
+  } catch(err) {
     console.error(err);
-    alert("❌ บันทึกไม่สำเร็จ");
+    alert("❌ เกิดข้อผิดพลาด");
   }
 }
 
@@ -108,21 +100,23 @@ async function saveRow(btn, row) {
 async function deleteData(row) {
   if (!confirm("ลบข้อมูล?")) return;
   try {
-    await fetch(API + "?row=" + row, { method: "DELETE" });
-    loadData();
-  } catch (err) {
+    const res = await fetch(API + "?row=" + row, { method: "DELETE" });
+    const result = await res.json();
+    if(result.status === "deleted") {
+      loadData();
+    } else {
+      alert("❌ ลบไม่สำเร็จ: " + result.message);
+    }
+  } catch(err) {
     console.error(err);
-    alert("❌ ลบไม่สำเร็จ");
+    alert("❌ เกิดข้อผิดพลาด");
   }
 }
 
 // 🔍 search
 document.getElementById("search").addEventListener("input", function() {
   const keyword = this.value.toLowerCase();
-  const filtered = allData.filter(row =>
-    Object.values(row).some(val => String(val).toLowerCase().includes(keyword))
-  );
-  render(filtered);
+  render(allData.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(keyword))));
 });
 
 // โหลดครั้งแรก
